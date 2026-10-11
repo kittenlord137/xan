@@ -1,5 +1,5 @@
 'use strict';
-const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { contextBridge, ipcRenderer, webUtils, webFrame } = require('electron');
 
 // The sandboxed preload has no url.pathToFileURL, so build the file:// URL by hand.
 // Handles spaces and # ? % in names, Windows drive letters and \\server\share paths.
@@ -47,6 +47,12 @@ contextBridge.exposeInMainWorld('api', {
   updateState: () => ipcRenderer.invoke('update:state'),
   checkUpdates: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  rifeStatus: (model) => ipcRenderer.invoke('rife:status', model),
+  rifeInstall: (model) => ipcRenderer.invoke('rife:install', model),
+  rifeCancel: () => ipcRenderer.invoke('rife:cancel'),
+  onRifeProgress: (cb) => on('rife:progress', cb),
+  setZoom: (z) => { try { webFrame.setZoomFactor(z); } catch (_) { /* ignore */ } },
+  getZoom: () => { try { return webFrame.getZoomFactor(); } catch (_) { return 1; } },
   onUpdate: (cb) => on('update', cb),
   onExportEvent: (cb) => on('export:event', cb),
   onOpenPaths: (cb) => on('open-paths', cb),

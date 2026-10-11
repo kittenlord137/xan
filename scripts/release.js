@@ -8,10 +8,16 @@
  *   node scripts/release.js --yes           don't ask for confirmation
  *   node scripts/release.js --check         check the token and repository, then stop
  *   node scripts/release.js --dry-run       show what would happen, change nothing, no network
+ *   node scripts/release.js --sync          only push the source code to GitHub (no version change, no build)
+ *   node scripts/release.js --no-sync       publish without pushing the source code first
+ *
+ * Every release also pushes the source code of this folder to the repository first (one commit per release),
+ * so GitHub always shows exactly the code the installer was built from.
  *
  * Needs a GitHub personal access token in the GH_TOKEN environment variable (it asks if it is missing).
  */
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
@@ -23,6 +29,9 @@ const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry-run');
 const YES = argv.includes('--yes');
 const CHECK = argv.includes('--check');
+const SYNC_ONLY = argv.includes('--sync');
+const NO_SYNC = argv.includes('--no-sync');
+const NO_BUILD = process.env.XAN_RELEASE_NO_BUILD === '1';   // test hook: skip the real installer build
 const FORCE_KIND = ['major', 'minor', 'patch'].find((k) => argv.includes(k)) || null;
 const PLACEHOLDER = /^YOUR-/i;
 
@@ -74,6 +83,77 @@ async function gh(method, url, token, body) {
   return { status: res.status, data };
 }
 
+
+// ---- pushing the source code (git data API: no git install needed)
+const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.vs', '.idea', '.vscode', 'out', 'release']);
+const SKIP_FILE = /^(\.DS_Store|Thumbs\.db|desktop\.ini|\.env.*|.*\.log|.*\.part|.*\.tmp)$/i;
+const MAX_FILE = 8 * 1024 * 1024;
+const MANAGED_DIRS = ['renderer', 'lib', 'shared', 'scripts', 'test', 'build'];   // files that vanish here are removed on GitHub too
+
+function collectSource(dir, rel) {
+  const out = [];
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (ent.isDirectory()) {
+      if (SKIP_DIRS.has(ent.name)) continue;
+      out.push(...collectSource(path.join(dir, ent.name), rel ? `${rel}/${ent.name}` : ent.name));
+    } else if (ent.isFile()) {
+      if (SKIP_FILE.test(ent.name)) continue;
+      const full = path.join(dir, ent.name);
+      if (fs.statSync(full).size > MAX_FILE) continue;
+      out.push({ path: rel ? `${rel}/${ent.name}` : ent.name, full });
+    }
+  }
+  return out;
+}
+const blobSha = (buf) => crypto.createHash('sha1').update(`blob ${buf.length}\0`).update(buf).digest('hex');
+
+// Returns { changed, sha, count } where sha is the (new) head of the branch.
+async function syncSource({ slug, token, branch, headSha, message }) {
+  const files = collectSource(root, '').map((f) => {
+    const buf = fs.readFileSync(f.full);
+    return { path: f.path, buf, sha: blobSha(buf) };
+  });
+  const tree = await gh('GET', `/repos/${slug}/git/trees/${headSha}?recursive=1`, token);
+  if (tree.status !== 200) throw new Error(`could not read the repository (status ${tree.status})`);
+  const remote = new Map((tree.data.tree || []).filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]));
+  const baseTree = tree.data.sha;
+
+  const entries = [];
+  for (const f of files) {
+    if (remote.get(f.path) === f.sha) continue;
+    const blob = await gh('POST', `/repos/${slug}/git/blobs`, token, { content: f.buf.toString('base64'), encoding: 'base64' });
+    if (blob.status !== 201) throw new Error(`could not upload ${f.path} (status ${blob.status})`);
+    entries.push({ path: f.path, mode: '100644', type: 'blob', sha: blob.data.sha });
+  }
+  if (!tree.data.truncated) {
+    const have = new Set(files.map((f) => f.path));
+    for (const p of remote.keys()) {
+      if (!have.has(p) && MANAGED_DIRS.some((d) => p.startsWith(d + '/'))) entries.push({ path: p, mode: '100644', type: 'blob', sha: null });
+    }
+  }
+  if (!entries.length) return { changed: false, sha: headSha, count: 0 };
+
+  const t = await gh('POST', `/repos/${slug}/git/trees`, token, { base_tree: baseTree, tree: entries });
+  if (t.status !== 201) throw new Error(`could not build the new file list (status ${t.status})`);
+  const c = await gh('POST', `/repos/${slug}/git/commits`, token, { message, tree: t.data.sha, parents: [headSha] });
+  if (c.status !== 201) throw new Error(`could not create the commit (status ${c.status})`);
+  const u = await gh('PATCH', `/repos/${slug}/git/refs/heads/${branch}`, token, { sha: c.data.sha });
+  if (u.status !== 200) throw new Error(`could not update ${branch} (status ${u.status}${u.data && u.data.message ? ': ' + u.data.message : ''})`);
+  return { changed: true, sha: c.data.sha, count: entries.length };
+}
+
+async function pushSource(ctx, message) {
+  console.log('\nPushing the source code to GitHub...');
+  try {
+    const r = await syncSource(Object.assign({ message }, ctx));
+    console.log(r.changed ? `Source pushed: ${r.count} file${r.count === 1 ? '' : 's'} changed (commit ${r.sha.slice(0, 7)}).` : 'The source on GitHub is already up to date.');
+    return r;
+  } catch (e) {
+    console.log(`Could not push the source code (${e.message}).`);
+    return null;
+  }
+}
+
 const TOKEN_HELP = `
 How to get a token (one time, about 2 minutes):
   1. On github.com open: your picture > Settings > Developer settings >
@@ -121,6 +201,7 @@ async function main() {
   // ---- 3. check the repo and the token before the slow build
   let alreadyReleased = false;
   let headSha = null;
+  let branch = 'main';
   if (!DRY) {
     const me = await gh('GET', '/user', token);
     if (me.status === 401) die('GitHub did not accept that token. Check that it was copied completely and has not expired.');
@@ -148,15 +229,24 @@ async function main() {
     if (repoRes.data.private) {
       die(`${slug} is private. Installed copies cannot download updates from a private repository.\nMake it public: repository Settings > scroll to the bottom > Change visibility. Then run this again.`);
     }
+    if (repoRes.data.default_branch) branch = repoRes.data.default_branch;
     if (repoRes.data.permissions && repoRes.data.permissions.push === false) {
       die(`This token is not allowed to write to ${slug}.`);
     }
     const commits = await gh('GET', `/repos/${slug}/commits?per_page=1`, token);
     if (commits.status === 409) die(`${slug} is completely empty. Open it on GitHub, click "Add a README" and commit it, then run this again.`);
-    if (commits.status === 200 && Array.isArray(commits.data) && commits.data[0]) headSha = commits.data[0].sha;
+    if (commits.status === 200 && Array.isArray(commits.data) && commits.data[0]) headSha = commits.data[0].sha || null;
 
     const rel = await gh('GET', `/repos/${slug}/releases/tags/v${pkg.version}`, token);
     alreadyReleased = rel.status === 200;
+  }
+
+  if (SYNC_ONLY) {
+    if (DRY) { console.log('\n[dry run] Would push the source code to ' + slug + '. Nothing was changed.'); return; }
+    if (!headSha) die('Could not find the latest commit on GitHub.');
+    const r = await pushSource({ slug, token, branch, headSha }, `Update source (v${pkg.version})`);
+    if (!r) process.exitCode = 1;
+    return;
   }
 
   // ---- 4. version
@@ -182,6 +272,12 @@ async function main() {
 
   if (newVersion !== oldVersion) { pkg.version = newVersion; savePkg(pkg); }
 
+  // ---- 5a. push the source code, so the release tag points at the code the installer is built from
+  if (headSha && !NO_SYNC) {
+    const r = await pushSource({ slug, token, branch, headSha }, `Release v${newVersion}`);
+    if (r) headSha = r.sha;
+  }
+
   // ---- 5. make sure the version tag exists (GitHub refuses to publish a release without one)
   if (headSha) {
     const tag = await gh('POST', `/repos/${slug}/git/refs`, token, { ref: `refs/tags/v${newVersion}`, sha: headSha });
@@ -193,7 +289,7 @@ async function main() {
 
   // ---- 6. build and upload
   console.log('\nBuilding the installer and uploading it...\n');
-  const r = spawnSync('npx', ['electron-builder', '--win', 'nsis', '--publish', 'always'], {
+  const r = NO_BUILD ? { status: 0 } : spawnSync('npx', ['electron-builder', '--win', 'nsis', '--publish', 'always'], {
     cwd: root, stdio: 'inherit', shell: true, env: Object.assign({}, process.env, { GH_TOKEN: token }),
   });
   if (r.status !== 0) {

@@ -1,8 +1,10 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const engine = require('./lib/ffmpeg');
+const rife = require('./lib/rife');
 
 const VIDEO_EXT = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'ts', 'mts', 'm2ts', 'mpg', 'mpeg', '3gp'];
 
@@ -71,12 +73,35 @@ function launchPaths(argv) {
     });
 }
 
+// The whole interface scales with the window: smaller windows shrink it so everything still fits,
+// big screens grow it a little. The design is laid out for about 1100 x 700.
+let scale = 1;
+let scaleTimer = null;
+function scaleFor(w, h) {
+  const r = Math.min(w / 1100, h / 700);
+  const z = r >= 1 ? 1 + Math.min(0.3, (r - 1) * 0.3) : Math.max(0.65, r);
+  return Math.round(z * 20) / 20;
+}
+function applyScale(now) {
+  clearTimeout(scaleTimer);
+  const run = () => {
+    if (!win || win.isDestroyed()) return;
+    const [w, h] = win.getContentSize();
+    const z = scaleFor(w, h);
+    if (z === scale && !now) return;
+    scale = z;
+    win.webContents.setZoomFactor(z);
+    try { win.setTitleBarOverlay({ color: '#08070b', symbolColor: '#cfc8de', height: Math.round(54 * z) }); } catch (_) { /* not supported here */ }
+  };
+  if (now) run(); else scaleTimer = setTimeout(run, 40);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1180,
     height: 760,
-    minWidth: 920,
-    minHeight: 620,
+    minWidth: 640,
+    minHeight: 480,
     backgroundColor: '#08070b',
     title: 'xan',
     icon: path.join(__dirname, 'renderer', 'icon.png'),
@@ -92,6 +117,8 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.webContents.on('did-finish-load', () => applyScale(true));
+  for (const ev of ['resize', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) win.on(ev, () => applyScale(false));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   // a dropped file must never navigate the window away from the app
   win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -181,10 +208,37 @@ ipcMain.handle('media:proxy', async (_e, p) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 
+// RIFE (pre-interpolation) is downloaded on demand into the app's data folder
+let rifeAbort = null;
+ipcMain.handle('rife:status', (_e, model) => {
+  rife.setRoot(path.join(app.getPath('userData'), 'rife'));
+  return rife.status(model);
+});
+ipcMain.handle('rife:install', async (e, model) => {
+  if (rifeAbort) return { ok: false, error: 'A download is already running.' };
+  rife.setRoot(path.join(app.getPath('userData'), 'rife'));
+  rifeAbort = new AbortController();
+  const sender = e.sender;
+  try {
+    const st = await rife.install(model, {
+      signal: rifeAbort.signal,
+      onProgress: (frac) => { if (!sender.isDestroyed()) sender.send('rife:progress', frac); },
+    });
+    return { ok: true, status: st };
+  } catch (err) {
+    return { ok: false, error: rifeAbort && rifeAbort.signal.aborted ? 'Cancelled' : 'Could not download RIFE: ' + err.message };
+  } finally {
+    rifeAbort = null;
+  }
+});
+ipcMain.handle('rife:cancel', () => { if (rifeAbort) rifeAbort.abort(); return true; });
+
 ipcMain.handle('export:start', async (e, payload) => {
   if (activeJob) return { ok: false, error: 'An export is already running.', results: [] };
   activeJob = new engine.Job();
   const sender = e.sender;
+  rife.setRoot(path.join(app.getPath('userData'), 'rife'));
+  payload = Object.assign({}, payload, { previewFile: path.join(os.tmpdir(), `xan-preview-${process.pid}.jpg`) });
   try {
     return await engine.exportAll(payload, (ev) => {
       if (!sender.isDestroyed()) sender.send('export:event', ev);
@@ -193,6 +247,7 @@ ipcMain.handle('export:start', async (e, payload) => {
     return { ok: false, error: err.message, results: [] };
   } finally {
     activeJob = null;
+    try { fs.rmSync(payload.previewFile, { force: true }); } catch (_) { /* best effort */ }
   }
 });
 
@@ -239,4 +294,4 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-module.exports = { getWindow: () => win };
+module.exports = { getWindow: () => win, scaleFor };

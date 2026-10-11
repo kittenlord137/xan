@@ -1,8 +1,8 @@
 (() => {
   'use strict';
-  const $ = (id) => document.getElementById(id);
+  const UI = window.UI;
+  const { $, api, esc, basename, dirname, clamp, ico, toast, openModal, closeModal } = UI;
   const Core = window.Core;
-  const api = window.api;
 
   const SEG_HUES = [268, 312, 232, 340, 196, 288, 250, 326];
 
@@ -17,22 +17,16 @@
     t: 0,                 // playhead, seconds
     playing: false,
     hasPreview: false,
-    busy: false,          // an export is running
     nextId: 1,
-    page: 'editor',
-    sm: { apply: false, active: '', configs: [] },
   };
+  // "a render is running" is shared with the Smoothie page
+  Object.defineProperty(state, 'busy', { get: () => UI.busy });
 
   const cur = () => state.files[state.cur] || null;
   const dur = () => (cur() ? cur().info.duration : 0);
-  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
-  const basename = (p) => String(p).split(/[\\/]/).pop();
-  const dirname = (p) => String(p).replace(/[\\/][^\\/]*$/, '');
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const sortedSegs = (f) => f.segments.slice().sort((a, b) => a.start - b.start || a.id - b.id);
   const selSeg = () => { const f = cur(); return f ? f.segments.find((s) => s.id === f.selectedId) || null : null; };
   const minGap = () => 1 / ((cur() && cur().info.fps) || 30);
-  const ico = (name) => `<svg class="i"><use href="#i-${name}"/></svg>`;
 
   // ------------------------------------------------------------ preferences
   function loadPrefs() {
@@ -55,34 +49,7 @@
     } catch (_) { /* storage unavailable */ }
   }
 
-  // ------------------------------------------------------------------ toast
-  let toastTimer = 0;
-  function toast(msg, kind) {
-    const el = $('toast');
-    el.textContent = msg;
-    el.className = 'toast ' + (kind || '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.add('hidden'), 5000);
-  }
-
-  // ------------------------------------------------------------------ modal
-  const modalOpen = () => !$('modal').classList.contains('hidden');
-  function openModal(html) { $('modalCard').innerHTML = html; $('modal').classList.remove('hidden'); }
-  function closeModal() { $('modal').classList.add('hidden'); $('modalCard').innerHTML = ''; }
-
-  // ------------------------------------------------------------ loading files
-  function setPage(name) {
-    if (state.page === name) return;
-    state.page = name;
-    if (name !== 'editor') { const v = $('video'); if (v && !v.paused) v.pause(); }
-    $('app').classList.toggle('hidden', name !== 'editor');
-    for (const el of document.querySelectorAll('.page')) el.classList.toggle('hidden', el.id !== 'page-' + name);
-    for (const b of document.querySelectorAll('.nav-item[data-page]')) b.classList.toggle('active', b.dataset.page === name);
-    if (name === 'editor') window.dispatchEvent(new Event('resize'));
-  }
-
   async function addPaths(paths) {
-    setPage('editor');
     if (!paths || !paths.length) return;
     if (state.busy) { toast('Wait for the export to finish first.', 'warn'); return; }
     let firstIdx = -1;
@@ -102,7 +69,6 @@
   }
 
   async function openDialog() {
-    setPage('editor');
     if (state.busy) return;
     const paths = await api.openFilesDialog();
     addPaths(paths);
@@ -333,7 +299,7 @@
   // ------------------------------------------------------------- rendering
   function renderAll() {
     renderTitle(); renderOutDir(); renderFileSelect();
-    renderSegments(); renderTimeline(); renderCompression(); renderTime(); renderSmoothieCard();
+    renderSegments(); renderTimeline(); renderCompression(); renderTime();
     renderEstimates(); renderExportBar(); updatePlayButton();
     $('cutMode').value = state.cutMode;
   }
@@ -509,13 +475,6 @@
   }
 
   // --------------------------------------------------------------- export
-  function fmtEta(s) {
-    s = Math.max(1, Math.round(s));
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    return `${m}m ${String(s % 60).padStart(2, '0')}s`;
-  }
-
   async function doExport() {
     if (state.busy || !cur()) return;
     const multi = state.files.length > 1 && state.exportAll;
@@ -528,28 +487,6 @@
       }
     }
     pause();
-    state.busy = true;
-    renderExportBar();
-    openModal(`
-      <h3>Exporting…</h3>
-      <div class="exp-name" id="expName">Starting…</div>
-      <div class="bar"><div id="expBar"></div></div>
-      <div class="exp-row"><span id="expPct">0%</span><span id="expEta"></span></div>
-      <p id="expNote" class="hint"></p>
-      <div class="modal-actions"><button id="expCancel" class="secondary">Cancel</button></div>`);
-
-    const off = api.onExportEvent((ev) => {
-      if (ev.type === 'item') {
-        const n = $('expName'); if (n) n.textContent = `${ev.name}  (${ev.index + 1} of ${ev.total})`;
-        const note = $('expNote'); if (note) note.textContent = ev.note || '';
-      } else if (ev.type === 'progress') {
-        const pct = Math.round(ev.overall * 100);
-        const bar = $('expBar'); if (bar) bar.style.width = pct + '%';
-        const p = $('expPct'); if (p) p.textContent = pct + '%';
-        const e = $('expEta'); if (e) e.textContent = ev.eta != null && ev.overall < 1 ? `about ${fmtEta(ev.eta)} left` : '';
-      }
-    });
-
     const payload = {
       files: files.map((f) => ({
         path: f.path,
@@ -559,45 +496,10 @@
       })),
       settings: Object.assign({}, state.settings),
       outDir: state.outDir || null,
-      smoothie: state.sm.apply ? JSON.parse(JSON.stringify(smCur().cfg)) : null,
+      smoothie: null,
     };
-    let res;
-    try { res = await api.startExport(payload); }
-    catch (e) { res = { ok: false, error: e.message, results: [] }; }
-    off();
-    state.busy = false;
+    await UI.runRender(payload, { title: 'Exporting…', noun: 'Export', compare: true });
     renderExportBar();
-    showExportResult(res);
-  }
-
-  function resultList(results) {
-    return `<ul class="results">${results.map((r) => {
-      let extra = '';
-      if (r.whole && r.srcSize) {
-        const pct = Math.round((1 - r.size / r.srcSize) * 100);
-        extra = pct > 0 ? ` <b>· ${pct}% smaller than the original</b>` : ' · not smaller than the original, try a lower target';
-      }
-      return `<li><div class="r-name">${esc(basename(r.output))}</div>
-        <div class="r-size">${Core.fmtBytes(r.size)}${extra}</div>
-        <button class="secondary" data-show="${esc(r.output)}">Show in folder</button></li>`;
-    }).join('')}</ul>`;
-  }
-
-  function showExportResult(res) {
-    const results = res.results || [];
-    let html;
-    if (res.ok) {
-      html = `<h3>${results.length === 1 ? 'Done' : `Done: ${results.length} videos`}</h3>${resultList(results)}`;
-    } else if (res.cancelled) {
-      html = `<h3>Export cancelled</h3>${results.length ? `<p>These finished before you cancelled:</p>${resultList(results)}` : '<p>Nothing was saved.</p>'}`;
-    } else {
-      html = `<h3>Export failed</h3><p class="err-text">${esc(res.error || 'Something went wrong.')}</p>${results.length ? `<p>These finished first:</p>${resultList(results)}` : ''}`;
-    }
-    const first = results[0];
-    html += `<div class="modal-actions">
-      ${first ? `<button class="secondary" id="resOpenFolder" data-folder="${esc(dirname(first.output))}">Open folder</button>` : ''}
-      <button class="primary" id="resClose">Close</button></div>`;
-    openModal(html);
   }
 
   // --------------------------------------------------------------- updates
@@ -644,272 +546,9 @@
       <div class="modal-actions"><button class="secondary" id="resUpdates">Check for updates</button><button class="primary" id="resClose">Close</button></div>`);
   }
 
-  // ---------------------------------------------------------- Smoothie
-  const SM_KEY = 'xan.smoothie';
-  const smClosed = new Set();          // card ids the user folded away (cards that need extra software start folded)
-  let smInit = false;
-  const smCur = () => state.sm.configs.find((c) => c.id === state.sm.active) || state.sm.configs[0];
-
-  function smLoad() {
-    let s = null;
-    try { s = JSON.parse(localStorage.getItem(SM_KEY) || 'null'); } catch (_) { /* first run */ }
-    const configs = s && Array.isArray(s.configs)
-      ? s.configs.filter((c) => c && c.id).map((c) => ({ id: String(c.id), name: String(c.name || 'Config').slice(0, 40), cfg: Smoothie.normalize(c.cfg) }))
-      : [];
-    if (!configs.length) configs.push({ id: 'default', name: 'Default', cfg: Smoothie.defaults() });
-    state.sm = { apply: !!(s && s.apply), active: s && configs.some((c) => c.id === s.active) ? s.active : configs[0].id, configs };
-  }
-  function smSave() {
-    try { localStorage.setItem(SM_KEY, JSON.stringify(state.sm)); } catch (_) { /* storage unavailable */ }
-  }
-  function smUniqueName(name, exceptId) {
-    const taken = new Set(state.sm.configs.filter((c) => c.id !== exceptId).map((c) => c.name.toLowerCase()));
-    let n = name || 'Config', i = 2;
-    while (taken.has(n.toLowerCase())) n = `${name} ${i++}`;
-    return n;
-  }
-  const smNewId = () => 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-
-  // What an export really looks like with Smoothie on: a different frame rate and length.
-  function effective(file, dur) {
-    if (!state.sm.apply) return { info: file.info, dur };
-    let plan;
-    try { plan = Smoothie.build(smCur().cfg, file.info); } catch (_) { return { info: file.info, dur }; }
-    if (!plan.touched) return { info: file.info, dur };
-    return { info: Object.assign({}, file.info, { fps: plan.outFps }), dur: dur / plan.speed };
-  }
-  const estimate = (file, dur, merged) => { const e = effective(file, dur); return Core.estimateBytes(state.settings, e.info, e.dur, merged); };
-  const targetCheck = (file, dur, merged) => { const e = effective(file, dur); return Core.checkTarget(state.settings, e.info, e.dur, merged); };
-
-  const smFmt = (k, v) => (k.step >= 1 ? String(Math.round(v)) : String(+Number(v).toFixed(2)));
-  const smPct = (k, v) => Math.max(0, Math.min(100, ((v - k.min) / (k.max - k.min)) * 100));
-
-  function smRow(sec, k, v) {
-    const dead = !sec.live || k.live === false;
-    const at = `data-sec="${esc(sec.id)}" data-key="${esc(k.key)}"${dead ? ' disabled' : ''}`;
-    const hint = k.hint ? `<div class="opt-hint">${esc(k.hint)}</div>` : '';
-    const tag = k.live === false && sec.live ? '<em class="tag">Not used</em>' : '';
-    const cls = dead ? ' dead' : '';
-    switch (k.type) {
-      case 'bool':
-        return `<label class="opt${k.key === 'enabled' ? ' master' : ''}${cls}"><input type="checkbox" ${at}${v ? ' checked' : ''}><span>${esc(k.label)}</span>${tag}</label>`;
-      case 'slider':
-        return `<div class="opt-col${cls}"><div class="opt-top"><span>${esc(k.label)}</span><b class="sl-val">${smFmt(k, v)}</b></div>
-          <input type="range" class="range" ${at} min="${k.min}" max="${k.max}" step="${k.step}" value="${v}" style="--p:${smPct(k, v)}%">${hint}</div>`;
-      case 'select':
-        return `<div class="opt-col${cls}"><div class="opt-top"><span>${esc(k.label)}</span>${tag}</div>
-          <select ${at}>${k.options.map((o) => `<option value="${esc(o)}"${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${hint}</div>`;
-      case 'number':
-        return `<div class="opt-col${cls}"><div class="opt-top"><span>${esc(k.label)}</span></div>
-          <input type="number" ${at} min="${k.min}" max="${k.max}" step="${k.step}" value="${v}">${hint}</div>`;
-      case 'path':
-        return `<div class="opt-col${cls}"><div class="opt-top"><span>${esc(k.label)}</span></div>
-          <div class="path-row"><div class="path-name${v ? ' set' : ''}" title="${esc(v)}">${v ? esc(basename(v)) : 'No file chosen'}</div>
-          <button class="secondary" data-act="lut-pick"${dead ? ' disabled' : ''}>Choose…</button>
-          ${v ? '<button class="tiny" data-act="lut-clear" title="Remove"><svg class="i"><use href="#i-x"/></svg></button>' : ''}</div></div>`;
-      default:
-        return `<div class="opt-col${cls}"><div class="opt-top"><span>${esc(k.label)}</span>${tag}</div>
-          <input type="text" ${at} value="${esc(v)}" spellcheck="false">${hint}</div>`;
-    }
-  }
-
-  function smCard(sec, cfg) {
-    const master = sec.keys.find((k) => k.key === 'enabled');
-    const off = master && !cfg[sec.id].enabled;
-    const closed = smClosed.has(sec.id);
-    const tag = sec.live ? '' : '<em class="tag">Not available yet</em>';
-    return `<div class="panel${closed ? ' collapsed' : ''}" data-card="${esc(sec.id)}">
-      <div class="panel-head"><svg class="i ph-ico"><use href="#i-${sec.icon}"/></svg><h2>${esc(sec.title)}</h2>${tag}<svg class="i chev"><use href="#i-chev-d"/></svg></div>
-      <div class="sm-body${off ? ' off' : ''}"><p class="sm-about">${esc(sec.about)}</p>${sec.keys.map((k) => smRow(sec, k, cfg[sec.id][k.key])).join('')}</div>
-    </div>`;
-  }
-
-  function smOptions() {
-    return state.sm.configs.map((c) => `<option value="${esc(c.id)}"${c.id === state.sm.active ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
-  }
-
-  function renderSmoothiePage() {
-    const c = smCur();
-    if (!smInit) { for (const s of Smoothie.SCHEMA) if (!s.live) smClosed.add(s.id); smInit = true; }
-    $('smTop').innerHTML = `
-      <div class="panel-head" style="cursor:default"><svg class="i ph-ico"><use href="#i-sparkle"/></svg><h2>Recipe</h2></div>
-      <label class="opt master"><input type="checkbox" class="sm-apply"${state.sm.apply ? ' checked' : ''}><span>Apply Smoothie when exporting</span></label>
-      <div class="opt-col"><div class="opt-top"><span>Config</span></div><select id="smSelect">${smOptions()}</select></div>
-      <div class="btn-line">
-        <button class="secondary" data-act="sm-new">New</button>
-        <button class="secondary" data-act="sm-rename">Rename</button>
-        <button class="secondary" data-act="sm-delete"${state.sm.configs.length < 2 ? ' disabled' : ''}>Delete</button>
-        <button class="secondary" data-act="sm-reset">Reset to defaults</button>
-        <button class="secondary" data-act="sm-import"><svg class="i"><use href="#i-open"/></svg>Import recipe.ini</button>
-        <button class="secondary" data-act="sm-export"><svg class="i"><use href="#i-export"/></svg>Export recipe.ini</button>
-      </div>
-      <div class="sm-line" id="smSum"></div>`;
-    const left = ['frame blending', 'interpolation', 'timescale'];
-    const right = ['color grading', 'lut', 'flowblur', 'pre-interp', 'artifact masking'];
-    const by = (id) => Smoothie.SCHEMA.find((s) => s.id === id);
-    $('smColL').innerHTML = left.map((id) => smCard(by(id), c.cfg)).join('');
-    $('smColR').innerHTML = right.map((id) => smCard(by(id), c.cfg)).join('');
-    renderSmoothieSummary();
-  }
-
-  function renderSmoothieSummary() {
-    const c = smCur();
-    const f = cur();
-    const sum = Smoothie.summary(c.cfg, f ? f.info : null);
-    const el = $('smSum'); if (el) el.textContent = `Does: ${sum}`;
-    renderSmoothieCard();
-  }
-
-  // the small card in the editor's right column
-  function renderSmoothieCard() {
-    const c = smCur();
-    for (const box of document.querySelectorAll('.sm-apply')) box.checked = state.sm.apply;
-    const q = $('smQuick'); q.innerHTML = smOptions();
-    $('smLine').textContent = Smoothie.summary(c.cfg, null).replace(/^./, (m) => m.toUpperCase());
-    const note = $('smNote');
-    let text = '';
-    const f = cur();
-    if (f && state.sm.apply) {
-      try {
-        const plan = Smoothie.build(c.cfg, f.info);
-        if (plan.notes.length) text = plan.notes[0];
-        else if (!plan.touched) text = 'Nothing to do for this video with these settings.';
-      } catch (_) { /* ignore */ }
-    }
-    note.textContent = text;
-    note.classList.toggle('hidden', !text);
-  }
-
-  function smChanged() {
-    smSave();
-    renderSmoothieSummary();
-    renderSegments(); renderEstimates(); renderExportBar();
-  }
-
-  function askName(title, initial, okLabel) {
-    return new Promise((resolve) => {
-      openModal(`<h3>${esc(title)}</h3><input id="smName" class="text-in" maxlength="40" value="${esc(initial)}" spellcheck="false">
-        <div class="modal-actions"><button class="secondary" id="smCancel">Cancel</button><button class="primary" id="smOk">${esc(okLabel)}</button></div>`);
-      const inp = $('smName');
-      inp.focus(); inp.select();
-      const done = (v) => { closeModal(); resolve(v); };
-      $('smOk').onclick = () => done(inp.value.trim() || null);
-      $('smCancel').onclick = () => done(null);
-      inp.onkeydown = (e) => { if (e.key === 'Enter') done(inp.value.trim() || null); };
-    });
-  }
-  function confirmBox(title, text, okLabel) {
-    return new Promise((resolve) => {
-      openModal(`<h3>${esc(title)}</h3><p>${esc(text)}</p>
-        <div class="modal-actions"><button class="secondary" id="smCancel">Cancel</button><button class="primary" id="smOk">${esc(okLabel)}</button></div>`);
-      const done = (v) => { closeModal(); resolve(v); };
-      $('smOk').onclick = () => done(true);
-      $('smCancel').onclick = () => done(false);
-    });
-  }
-
-  function addConfig(name, cfg) {
-    const c = { id: smNewId(), name: smUniqueName(name), cfg: Smoothie.normalize(cfg) };
-    state.sm.configs.push(c);
-    state.sm.active = c.id;
-    return c;
-  }
-
-  async function smAction(act) {
-    const c = smCur();
-    if (act === 'sm-new') {
-      const name = await askName('New config', smUniqueName(c.name + ' copy'), 'Create');
-      if (!name) return;
-      addConfig(name, JSON.parse(JSON.stringify(c.cfg)));
-      smSave(); renderSmoothiePage(); toast(`Created "${smCur().name}" from the current settings.`, 'ok');
-    } else if (act === 'sm-rename') {
-      const name = await askName('Rename config', c.name, 'Rename');
-      if (!name) return;
-      c.name = smUniqueName(name, c.id);
-      smSave(); renderSmoothiePage();
-    } else if (act === 'sm-delete') {
-      if (state.sm.configs.length < 2) return;
-      if (!(await confirmBox('Delete this config?', `"${c.name}" will be removed. This can't be undone.`, 'Delete'))) return;
-      state.sm.configs = state.sm.configs.filter((x) => x.id !== c.id);
-      state.sm.active = state.sm.configs[0].id;
-      smSave(); renderSmoothiePage(); renderEstimates(); renderSegments(); renderExportBar();
-    } else if (act === 'sm-reset') {
-      if (!(await confirmBox('Reset to defaults?', `All settings in "${c.name}" go back to Smoothie's defaults.`, 'Reset'))) return;
-      c.cfg = Smoothie.defaults();
-      smChanged(); renderSmoothiePage();
-    } else if (act === 'sm-import') {
-      let r;
-      try { r = await api.importRecipe(); } catch (e) { toast(e.message, 'error'); return; }
-      if (!r) return;
-      const parsed = Smoothie.parseRecipe(r.text);
-      if (!parsed.sections) { toast("That file doesn't look like a Smoothie recipe.", 'warn'); return; }
-      const nice = /^recipe$/i.test(r.name) ? 'Imported recipe' : r.name;
-      addConfig(nice, parsed.config);
-      smChanged(); renderSmoothiePage();
-      toast(`Imported "${smCur().name}". Settings xan can't use yet were kept and will export back unchanged.`, 'ok');
-    } else if (act === 'sm-export') {
-      let p;
-      try { p = await api.exportRecipe({ name: c.name, text: Smoothie.serializeRecipe(c.cfg) }); } catch (e) { toast(e.message, 'error'); return; }
-      if (p) toast(`Saved ${basename(p)}`, 'ok');
-    }
-  }
-
-  function wireSmoothie() {
-    const page = $('page-smoothie');
-    // sliders move smoothly and save as they go; everything else saves on change
-    page.addEventListener('input', (e) => {
-      const el = e.target;
-      if (!(el.matches && el.matches('input[type=range][data-sec]'))) return;
-      const k = Smoothie.SCHEMA.find((s) => s.id === el.dataset.sec).keys.find((x) => x.key === el.dataset.key);
-      const v = Number(el.value);
-      smCur().cfg[el.dataset.sec][el.dataset.key] = v;
-      el.style.setProperty('--p', smPct(k, v) + '%');
-      const out = el.closest('.opt-col').querySelector('.sl-val'); if (out) out.textContent = smFmt(k, v);
-      smChanged();
-    });
-    page.addEventListener('change', (e) => {
-      const el = e.target;
-      if (el.id === 'smSelect') { state.sm.active = el.value; smSave(); renderSmoothiePage(); renderSegments(); renderEstimates(); renderExportBar(); return; }
-      if (el.classList && el.classList.contains('sm-apply')) { state.sm.apply = el.checked; smChanged(); return; }
-      if (!el.dataset || !el.dataset.sec || el.type === 'range') return;
-      const sec = Smoothie.SCHEMA.find((s) => s.id === el.dataset.sec);
-      const k = sec.keys.find((x) => x.key === el.dataset.key);
-      const cfg = smCur().cfg;
-      if (k.type === 'bool') {
-        cfg[sec.id][k.key] = el.checked;
-        if (k.key === 'enabled') el.closest('.sm-body').classList.toggle('off', !el.checked);
-      } else if (k.type === 'number') {
-        const v = Math.min(k.max, Math.max(k.min, Number(el.value) || k.def));
-        cfg[sec.id][k.key] = v; el.value = v;
-      } else cfg[sec.id][k.key] = el.value;
-      smChanged();
-    });
-    page.addEventListener('click', async (e) => {
-      const head = e.target.closest('.panel-head');
-      if (head && head.parentElement.dataset.card) {
-        const id = head.parentElement.dataset.card;
-        head.parentElement.classList.toggle('collapsed');
-        if (head.parentElement.classList.contains('collapsed')) smClosed.add(id); else smClosed.delete(id);
-        return;
-      }
-      const btn = e.target.closest('[data-act]');
-      if (!btn) return;
-      const act = btn.dataset.act;
-      if (act === 'lut-pick') {
-        const p = await api.chooseFile({ title: 'Choose a LUT', filters: [{ name: 'LUT', extensions: ['cube', '3dl', 'dat', 'm3d', 'csp'] }, { name: 'All files', extensions: ['*'] }] });
-        if (!p) return;
-        smCur().cfg.lut.path = p; smCur().cfg.lut.enabled = true; smChanged(); renderSmoothiePage();
-      } else if (act === 'lut-clear') {
-        smCur().cfg.lut.path = ''; smChanged(); renderSmoothiePage();
-      } else smAction(act);
-    });
-    // the little card in the editor
-    $('smPanel').addEventListener('change', (e) => {
-      if (e.target.classList.contains('sm-apply')) { state.sm.apply = e.target.checked; smChanged(); renderSmoothiePage(); }
-      else if (e.target.id === 'smQuick') { state.sm.active = e.target.value; smSave(); renderSmoothiePage(); renderSegments(); renderEstimates(); renderExportBar(); }
-    });
-    $('smEdit').addEventListener('click', () => setPage('smoothie'));
-  }
+  // ------------------------------------------------------------ estimates
+  const estimate = (file, dur, merged) => Core.estimateBytes(state.settings, file.info, dur, merged);
+  const targetCheck = (file, dur, merged) => Core.checkTarget(state.settings, file.info, dur, merged);
 
   // ---------------------------------------------------------- timeline drag
   const timeline = $('timeline');
@@ -998,7 +637,7 @@
     const preset = $('preset');
     const g1 = document.createElement('optgroup'); g1.label = 'Fit under a size';
     const g2 = document.createElement('optgroup'); g2.label = 'Constant quality';
-    for (const p of Core.PRESETS) (p.mode === 'size' ? g1 : g2).appendChild(new Option(p.label, p.id));
+    for (const p of Core.PRESETS.filter((x) => !x.hidden)) (p.mode === 'size' ? g1 : g2).appendChild(new Option(p.label, p.id));
     preset.append(g1, g2);
   }
 
@@ -1033,9 +672,7 @@
     $('dzOpen').addEventListener('click', openDialog);
     $('btnHelp').addEventListener('click', showHelp);
     $('navHelp').addEventListener('click', showHelp);
-    wireSmoothie();
     $('navUpdates').addEventListener('click', () => api.checkUpdates());
-    for (const b of document.querySelectorAll('.nav-item[data-page]')) b.addEventListener('click', () => setPage(b.dataset.page));
     for (const head of document.querySelectorAll('#sidebar .panel-head')) {
       head.addEventListener('click', (e) => { if (!e.target.closest('.btn-row')) head.parentElement.classList.toggle('collapsed'); });
     }
@@ -1078,34 +715,9 @@
     v.addEventListener('pause', () => { state.playing = false; updatePlayButton(); });
     v.addEventListener('ended', () => { state.playing = false; state.t = Math.min(dur(), v.currentTime); renderTime(); updatePlayButton(); });
 
-    // modal buttons (delegated)
-    $('modal').addEventListener('click', (e) => {
-      const t = e.target;
-      if (t.id === 'expCancel') { t.disabled = true; t.textContent = 'Cancelling…'; api.cancelExport(); return; }
-      if (t.id === 'resClose') { closeModal(); return; }
-      if (t.id === 'resUpdates') { closeModal(); api.checkUpdates(); return; }
-      if (t.dataset && t.dataset.show) { api.showInFolder(t.dataset.show); return; }
-      if (t.dataset && t.dataset.folder) { api.openFolder(t.dataset.folder); return; }
-      if (t === $('modal') && !state.busy) closeModal();
-    });
-
-    // drag and drop
-    let depth = 0;
-    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
-    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; $('dropOverlay').classList.remove('hidden'); });
-    window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
-    window.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) $('dropOverlay').classList.add('hidden'); });
-    window.addEventListener('drop', (e) => {
-      e.preventDefault();
-      depth = 0;
-      $('dropOverlay').classList.add('hidden');
-      const paths = Array.from(e.dataTransfer.files || []).map((f) => api.pathForFile(f)).filter(Boolean);
-      addPaths(paths);
-    });
-
     document.addEventListener('keydown', onKey);
-    api.onOpenPaths(addPaths);
-    api.onMenu((name) => { if (name === 'open') openDialog(); else if (name === 'help') showHelp(); });
+    api.onOpenPaths((paths) => UI.addPaths(paths));
+    api.onMenu((name) => { if (name === 'open') UI.openDialog(); else if (name === 'help') showHelp(); });
   }
 
   function toggleMute() {
@@ -1117,8 +729,8 @@
   function onKey(e) {
     const tag = (e.target.tagName || '').toLowerCase();
     const typing = tag === 'input' || tag === 'textarea' || tag === 'select';
-    if (modalOpen()) { if (e.key === 'Escape' && !state.busy) closeModal(); return; }
-    if (state.page !== 'editor') return;
+    if (UI.modalOpen()) return;
+    if (UI.page !== 'editor') return;
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); doExport(); return; }
     if (typing || mod || e.altKey || !cur()) return;
@@ -1146,16 +758,19 @@
 
   async function init() {
     loadPrefs();
-    smLoad();
+    UI.handlers.editor = { add: addPaths, open: openDialog, onHide: pause };
+    UI.onBusy(() => renderExportBar());
+    UI.initCommon();
+    UI.initSmoothie();
     buildSelects();
     wire();
     showUI(false);
-    renderSmoothiePage();
     renderAll();
     state.version = await api.appVersion();
     $('navVersion').textContent = 'v' + state.version;
     api.updateState().then(onUpdate);   // an update may already be downloaded if the page reloaded
     state.binaries = await api.binaries();
+    UI.smoothieBinaries(state.binaries);
     renderCompression();
     if (!state.binaries.ok) {
       openModal(`<h3>ffmpeg could not be started</h3>

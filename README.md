@@ -1,6 +1,6 @@
 # xan
 
-Trim and shrink videos. Drop a clip in, set where it starts and ends, pick a size, export.
+Trim and shrink videos, or run them through Smoothie for motion blur and smoothing. Drop a clip in, set where it starts and ends, pick a size, export.
 It is a desktop app (Electron) that uses ffmpeg, which is bundled, so there is nothing else to install.
 
 Your original video is never changed. Exports are saved next to it (or in a folder you choose) as new files ending in `_compressed.mp4`.
@@ -38,7 +38,9 @@ Sizes use 1 MB = 1,000,000 bytes, so a "10 MB" file shows as about 9.5 MB in Win
 
 ### Smoothie (motion blur and smoothing)
 
-The **Smoothie** page holds a recipe in the same layout as the real Smoothie tool, and the little **Smoothie** card in the editor switches it on for your exports.
+Smoothie is its own page, separate from compressing. Add a clip (drop it on the page or press **Add clips**), pick your effects, press **Render**. You get `<name>_smoothie.mp4` next to the original, at a quality you choose (near lossless up to balanced). Nothing is squeezed to a size; for that, use **Trim & Compress**.
+
+While anything renders, a **live preview** picture of the frames being made is shown in the progress window.
 
 | Card | What it does in xan |
 | --- | --- |
@@ -46,9 +48,11 @@ The **Smoothie** page holds a recipe in the same layout as the real Smoothie too
 | Interpolation | Makes new in-between frames (ffmpeg's built-in interpolation, so it is slow). Can be combined with frame blending. |
 | Timescale | Input and output speed, with the audio following along. |
 | Color grading, LUT | Brightness, saturation, contrast, and a .cube or .3dl LUT with opacity. |
-| Flowblur, Pre-interpolation, Artifact masking | Shown, but not available yet: they need extra software (RSMB, RIFE) that xan does not include. |
+| Flowblur | Blur that follows the motion. xan's own version: the real Smoothie uses RSMB, a paid plugin xan can't include, so it will not look identical. |
+| Pre-interpolation | AI frame interpolation with RIFE (2x, 3x, 4x...) before everything else. Needs a graphics card with Vulkan support and a one-time download of about 13 MB (press **Download** in its card). Uses temporary picture files, so it needs free disk space. |
+| Artifact masking | A black and white picture the size of your video. Black = the original frames show through, so a HUD or crosshair is not smeared by interpolation or flowblur. Switch it on per effect with "Use the mask". |
 
-Save as many **configs** as you like. **Import recipe.ini** reads a recipe from the real Smoothie; **Export recipe.ini** writes one back (settings xan can't use yet are kept as they were).
+Save as many **configs** as you like. **Import** reads a `recipe.ini` from the real Smoothie; **Export** writes one back (settings xan can't use, such as tuning and algorithm, are kept as they were).
 
 ### Keyboard shortcuts
 
@@ -70,6 +74,8 @@ Save as many **configs** as you like. **Import recipe.ini** reads a recipe from 
 
 ## Good to know
 
+- **The window scales.** The whole interface zooms to fit the window, from a small window up to a large screen.
+
 - **Previews.** Videos the built-in player can't show reliably (HEVC from many GPU recorders, 10-bit, and so on) get a small low-res preview copy automatically. The export always uses your original.
 - **Merge cuts** carries the first audio track only. Separate files keep every audio track unless you pick otherwise.
 - **Size estimates** for the constant-quality presets are rough: it depends on how busy the footage is.
@@ -85,9 +91,11 @@ npm run test:ui  # launches the app and drives it (needs a display; add --no-san
 | File | What it does |
 | --- | --- |
 | `main.js`, `preload.js` | Electron main process and the safe bridge to the page |
-| `lib/ffmpeg.js` | Probing, planning output files, the ffmpeg commands, progress, cancel |
-| `scripts/release.js` | Builds the installer and publishes it to GitHub Releases (`Publish update.bat`) |
+| `lib/ffmpeg.js` | Probing, planning output files, the ffmpeg commands, progress, live preview, cancel |
+| `lib/rife.js`, `lib/remotezip.js` | Downloading and running RIFE (only the parts needed are fetched from the project's zip) |
+| `shared/smoothie.js` | The Smoothie recipe format and how each setting becomes an ffmpeg filter |
+| `scripts/release.js` | Pushes the source to GitHub, builds the installer and publishes it to GitHub Releases (`Publish update.bat`) |
 | `shared/core.js` | Presets, bitrate and size maths, time formatting (used by both sides) |
-| `renderer/` | The interface |
+| `renderer/` | The interface (`common.js` shared bits, `app.js` the editor, `smoothie-page.js` the Smoothie page) |
 
 Set `FFMPEG_PATH` / `FFPROBE_PATH` to use your own ffmpeg instead of the bundled one.

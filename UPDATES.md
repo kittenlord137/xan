@@ -20,7 +20,7 @@ Only the **installed** version updates itself. Running from the folder with `Sta
 ## Every update after that
 
 1. Change the app however you like.
-2. Double-click `Publish update.bat`. It picks the next version number, builds the installer, and uploads it.
+2. Double-click `Publish update.bat`. It pushes your source code to the repository, picks the next version number, builds the installer, and uploads it.
 3. Everyone with xan installed gets it the next time the app starts.
 
 Options (run in a terminal as `npm run release -- <option>`):
@@ -31,6 +31,12 @@ Options (run in a terminal as `npm run release -- <option>`):
 | `--check` | Test the token and repository, change nothing |
 | `--dry-run` | Show what would happen, no network, change nothing |
 | `--yes` | Don't ask for confirmation |
+| `--sync` | Only push the source code to GitHub (no version change, no build) |
+| `--no-sync` | Publish without pushing the source code first |
+
+## The source code goes to GitHub automatically
+
+Every time you publish, the script first uploads the files of this folder to the repository as one commit named `Release vX.Y.Z` (only the files that changed), and the version tag points at that commit. `node_modules`, `dist`, `.env` files and logs are never uploaded. If that step fails (for example, the token can't write code), the update still goes out and the script says so.
 
 ## If something goes wrong
 

@@ -32,7 +32,7 @@
         { key: 'speed', label: 'Speed', type: 'select', def: 'medium', options: ['medium', 'fast', 'faster', 'fastest'], hint: 'medium: best quality, slowest. fastest: just blends neighbouring frames.' },
         { key: 'tuning', label: 'Tuning', type: 'select', def: 'weak', options: ['film', 'animation', 'weak', 'smooth'], live: false },
         { key: 'algorithm', label: 'Algorithm', type: 'select', def: '23', options: ['2', '13', '23'], live: false },
-        { key: 'masking', label: 'Masking', type: 'bool', def: false, live: false },
+        { key: 'masking', label: 'Use the mask', type: 'bool', def: false, hint: 'Keeps the parts of the picture that the mask paints black free from new frames (needs a file in Artifact masking).' },
         { key: 'use gpu', label: 'Use GPU', type: 'bool', def: false, live: false },
       ],
     },
@@ -64,33 +64,34 @@
       ],
     },
     {
-      id: 'flowblur', title: 'Flowblur', icon: 'blur', live: false,
-      about: 'Blur that follows motion (RSMB). Needs extra software that xan does not include yet.',
+      id: 'flowblur', title: 'Flowblur', icon: 'blur', live: true, badge: 'xan version',
+      about: 'Blur that follows the motion in the picture. The real Smoothie uses RSMB, a paid plugin xan cannot include, so this is xan\'s own version: it makes in-between frames with ffmpeg and blends them. Slow, and it will not look identical to RSMB.',
       keys: [
         { key: 'enabled', label: 'Flowblur', type: 'bool', def: false },
-        { key: 'masking', label: 'Masking', type: 'bool', def: false },
-        { key: 'amount', label: 'Amount', type: 'slider', def: 125, min: 0, max: 200, step: 1 },
-        { key: 'do blending', label: 'Blend', type: 'select', def: 'after', options: ['after', 'before'] },
+        { key: 'masking', label: 'Use the mask', type: 'bool', def: false, hint: 'Keeps the parts the mask paints black (a HUD, for example) free from blur.' },
+        { key: 'amount', label: 'Amount', type: 'slider', def: 125, min: 0, max: 200, step: 1, hint: 'How much of each frame\'s time the blur covers, in percent. 100 is a normal camera shutter.' },
+        { key: 'do blending', label: 'Frame blending', type: 'select', def: 'after', options: ['after', 'before'], hint: 'When frame blending is also on: do it after or before the flowblur.' },
       ],
     },
     {
-      id: 'pre-interp', title: 'Pre-interpolation', icon: 'sparkle', live: false,
-      about: 'AI frame interpolation (RIFE) before everything else. Needs extra software that xan does not include yet.',
+      id: 'pre-interp', title: 'Pre-interpolation', icon: 'sparkle', live: true, badge: 'RIFE',
+      about: 'AI frame interpolation (RIFE), done first so everything after it has more frames to work with. Needs a graphics card with Vulkan support, and a one-time download (about 13 MB). Works through temporary picture files, so it needs free disk space.',
       keys: [
         { key: 'enabled', label: 'Pre-interpolation', type: 'bool', def: false },
-        { key: 'masking', label: 'Masking', type: 'bool', def: false },
-        { key: 'factor', label: 'Factor', type: 'text', def: '3x' },
-        { key: 'model', label: 'Model', type: 'text', def: 'rife-v4.4' },
+        { key: 'masking', label: 'Use the mask', type: 'bool', def: false, hint: 'Keeps the parts the mask paints black free from new frames.' },
+        { key: 'factor', label: 'Factor', type: 'text', def: '3x', hint: 'How many times more frames, for example 2x, 3x or 4x.' },
+        { key: 'model', label: 'Model', type: 'select', def: 'rife-v4.6', options: ['rife-v4.6', 'rife-v4'], hint: 'rife-v4.6 is the newest and best for most footage.' },
+        { key: '_rife', label: 'RIFE', type: 'rife' },
       ],
     },
     {
-      id: 'artifact masking', title: 'Artifact masking', icon: 'film', live: false,
-      about: 'Hides interpolation artifacts using a mask. Needs extra software that xan does not include yet.',
+      id: 'artifact masking', title: 'Artifact masking', icon: 'film', live: true,
+      about: 'A black and white picture the size of your video. Where it is black, the original frames show through, so fixed things like a HUD or crosshair do not get smeared by interpolation or flowblur. Switch it on for each effect with "Use the mask".',
       keys: [
         { key: 'enabled', label: 'Artifact masking', type: 'bool', def: false },
-        { key: 'feathering', label: 'Feathering', type: 'bool', def: true },
-        { key: 'folder path', label: 'Folder', type: 'text', def: '' },
-        { key: 'file name', label: 'File name', type: 'text', def: '' },
+        { key: 'feathering', label: 'Feathering', type: 'bool', def: true, hint: 'Softens the edge of the mask.' },
+        { key: 'folder path', label: 'Folder', type: 'text', def: '', hidden: true },
+        { key: 'file name', label: 'Mask file', type: 'maskfile', def: '', hint: 'A .png picture. Black = keep the original, white = use the effect.' },
       ],
     },
   ];
@@ -120,7 +121,7 @@
     const cfg = {};
     for (const sec of SCHEMA) {
       cfg[sec.id] = {};
-      for (const k of sec.keys) cfg[sec.id][k.key] = k.def;
+      for (const k of sec.keys) if (k.type !== 'rife') cfg[sec.id][k.key] = k.def;
     }
     cfg.hidden = clone(HIDDEN);
     return cfg;
@@ -133,7 +134,7 @@
     for (const sec of SCHEMA) {
       const s = src[sec.id] && typeof src[sec.id] === 'object' ? src[sec.id] : {};
       for (const k of sec.keys) {
-        if (!(k.key in s)) continue;
+        if (k.type === 'rife' || !(k.key in s)) continue;
         const v = s[k.key];
         if (k.type === 'bool') out[sec.id][k.key] = truthy(v);
         else if (k.type === 'number' || k.type === 'slider') out[sec.id][k.key] = clamp(num(v, k.def), k.min, k.max);
@@ -167,7 +168,7 @@
     for (const sec of SCHEMA) {
       if (!raw[sec.id]) continue;
       cfg[sec.id] = {};
-      for (const k of sec.keys) if (k.key in raw[sec.id]) cfg[sec.id][k.key] = raw[sec.id][k.key];
+      for (const k of sec.keys) if (k.type !== 'rife' && k.key in raw[sec.id]) cfg[sec.id][k.key] = raw[sec.id][k.key];
     }
     cfg.hidden = {};
     for (const name of Object.keys(HIDDEN)) if (raw[name]) cfg.hidden[name] = raw[name];
@@ -181,7 +182,7 @@
     for (const id of RECIPE_ORDER) {
       const sec = SCHEMA.find((s) => s.id === id);
       const lines = [`[${id}]`];
-      if (sec) for (const k of sec.keys) lines.push(`${k.key}: ${fmt(cfg[id][k.key])}`.replace(/: $/, ':'));
+      if (sec) for (const k of sec.keys.filter((x) => x.type !== 'rife')) lines.push(`${k.key}: ${fmt(cfg[id][k.key])}`.replace(/: $/, ':'));
       else for (const [key, v] of Object.entries(cfg.hidden[id])) lines.push(`${key}: ${v}`.replace(/: $/, ':'));
       blocks.push(lines.join('\n'));
     }
@@ -235,19 +236,52 @@
     fastest: 'mi_mode=blend',
   };
 
-  // Returns {body, speed, outFps, notes[]}. `body` is a filter graph fragment (no input/output labels) or ''.
+  const joinPath = (folder, file) => {
+    if (!folder) return file || '';
+    if (!file) return '';
+    const sep = /[\\]/.test(folder) && !/\//.test(folder) ? '\\' : '/';
+    return /[\\/]$/.test(folder) ? folder + file : folder + sep + file;
+  };
+  const maskPathOf = (cfg) => joinPath(cfg['artifact masking']['folder path'], cfg['artifact masking']['file name']);
+  const parseFactor = (t) => { const n = parseFloat(String(t).replace(/x/i, '')); return Number.isFinite(n) ? n : 0; };
+
+  const FLOW_SUBFRAMES = 4;      // in-between frames made per frame for flowblur
+
+  // What Smoothie does to a video: {compose, body, speed, outFps, notes, touched, pre, maskPath, maskCount}.
+  //   pre      - {factor, model, masked} when RIFE has to run first (the engine does that, then hands over a video)
+  //   compose(inLabel, outLabel, post, maskLabel) - the whole ffmpeg filter graph, with `post` filters on the end
   function build(input, info) {
     const cfg = normalize(input);
     const notes = [];
-    const stages = [];                      // strings, or {lut: ...}
+    const width = (info && info.width) || 0, height = (info && info.height) || 0;
     const speed = cfg.timescale.out / cfg.timescale.in;
     let fps = (info && info.fps) || 0;
     const baseFps = fps;
-    let touched = false;
+    const maskPath = cfg['artifact masking'].enabled ? maskPathOf(cfg) : '';
+    const wantMask = (on, what) => {
+      if (!on) return false;
+      if (!cfg['artifact masking'].enabled) { notes.push(`${what}: "Use the mask" is on, but Artifact masking is switched off.`); return false; }
+      if (!maskPath) { notes.push(`${what}: "Use the mask" is on, but no mask file is chosen.`); return false; }
+      return true;
+    };
+    // stages: {f: 'filter'} plain filter | {masked: [filters], origFps} | {lut, opacity}
+    const stages = [];
+    let touched = false, pre = null, maskCount = 0;
+
+    const pi = cfg['pre-interp'];
+    if (pi.enabled) {
+      const factor = parseFactor(pi.factor);
+      if (factor >= 1.2) {
+        pre = { factor, model: pi.model, masked: wantMask(pi.masking, 'Pre-interpolation') };
+        fps *= factor;
+        touched = true;
+        if (factor > 8) notes.push('A very high pre-interpolation factor needs a lot of disk space and time.');
+      } else notes.push(`Pre-interpolation skipped: the factor (${pi.factor}) must be at least 1.2x.`);
+    }
 
     if (Math.abs(speed - 1) > 1e-6) {
-      stages.push(`setpts=PTS*${num4(cfg.timescale.in / cfg.timescale.out)}`);
-      fps = fps * speed;
+      stages.push({ f: `setpts=PTS*${num4(cfg.timescale.in / cfg.timescale.out)}` });
+      fps *= speed;
       touched = true;
     }
 
@@ -255,70 +289,99 @@
     if (it.enabled) {
       const target = parseTargetFps(it.fps, fps);
       if (target > fps * 1.01) {
-        stages.push(`minterpolate=fps=${num4(target)}:${MINTERP[it.speed]}`);
+        const proc = [`minterpolate=fps=${num4(target)}:${MINTERP[it.speed]}`];
+        if (wantMask(it.masking, 'Interpolation')) { stages.push({ masked: proc, origFps: target }); maskCount++; }
+        else stages.push({ f: proc[0] });
         fps = target;
         touched = true;
         if (target > 480) notes.push('A very high interpolation rate takes a very long time.');
       } else if (target > 0) notes.push(`Interpolation skipped: the target (${num4(target)} fps) is not above the video's ${num4(fps)} fps.`);
     }
 
-    const fb = cfg['frame blending'];
-    if (fb.enabled) {
+    const blendStage = () => {
+      const fb = cfg['frame blending'];
+      if (!fb.enabled) return;
       const out = fb.fps;
       if (fps > out * 1.01) {
         const ratio = fps / out;
-        let frames = Math.round(ratio * fb.intensity);
-        frames = clamp(frames, 1, 1000);
-        if (frames >= 2) {
-          const w = weights(fb.weighting, frames).map(num4).join(' ');
-          stages.push(`tmix=frames=${frames}:weights='${w}'`);
-        }
-        stages.push(Math.abs(ratio - Math.round(ratio)) < 0.01 ? `framestep=${Math.round(ratio)}` : `fps=${num4(out)}`);
+        const frames = clamp(Math.round(ratio * fb.intensity), 1, 1000);
+        if (frames >= 2) stages.push({ f: `tmix=frames=${frames}:weights='${weights(fb.weighting, frames).map(num4).join(' ')}'` });
+        stages.push({ f: Math.abs(ratio - Math.round(ratio)) < 0.01 ? `framestep=${Math.round(ratio)}` : `fps=${num4(out)}` });
         fps = out;
         touched = true;
-      } else {
-        notes.push(`Frame blending skipped: the video (${num4(fps)} fps) is not above ${num4(out)} fps, so there is nothing to blend.`);
-      }
-    }
+      } else notes.push(`Frame blending skipped: the video (${num4(fps)} fps) is not above ${num4(out)} fps, so there is nothing to blend.`);
+    };
+    const flowStage = () => {
+      const fl = cfg.flowblur;
+      if (!fl.enabled || fl.amount <= 0) return;
+      const K = FLOW_SUBFRAMES;
+      const n = Math.max(2, Math.round(K * fl.amount / 100));
+      const proc = [`minterpolate=fps=${num4(fps * K)}:${MINTERP.fast}`, `tmix=frames=${n}:weights='${weights('equal', n).join(' ')}'`, `framestep=${K}`];
+      if (wantMask(fl.masking, 'Flowblur')) { stages.push({ masked: proc, origFps: 0 }); maskCount++; }
+      else proc.forEach((f) => stages.push({ f }));
+      touched = true;
+    };
+    if (cfg.flowblur['do blending'] === 'before') { blendStage(); flowStage(); } else { flowStage(); blendStage(); }
 
     // Pin the frame rate. After joined cuts ffmpeg no longer knows the rate and would guess 25 fps, dropping frames.
-    if (touched && fps > 0) stages.push(`fps=${num4(fps)}`);
-    const pinned = touched;
+    if (touched && fps > 0) stages.push({ f: `fps=${num4(fps)}` });
 
     const cg = cfg['color grading'];
     if (cg.enabled) {
-      if (cg.contrast !== 1 || cg.saturation !== 1) { stages.push(`eq=contrast=${num4(cg.contrast)}:saturation=${num4(cg.saturation)}`); touched = true; }
-      if (cg.brightness !== 1) { stages.push(`lutyuv=y='clip(val*${num4(cg.brightness)},minval,maxval)'`); touched = true; }
+      if (cg.contrast !== 1 || cg.saturation !== 1) { stages.push({ f: `eq=contrast=${num4(cg.contrast)}:saturation=${num4(cg.saturation)}` }); touched = true; }
+      if (cg.brightness !== 1) { stages.push({ f: `lutyuv=y='clip(val*${num4(cg.brightness)},minval,maxval)'` }); touched = true; }
     }
-
     const lut = cfg.lut;
     if (lut.enabled) {
       if (!lut.path) notes.push('LUT is on but no file is chosen, so it was skipped.');
       else { stages.push({ lut: lut.path, opacity: lut.opacity }); touched = true; }
     }
 
-    let body = '';
-    if (touched) {
-      if (!pinned && fps > 0) stages.splice(0, 0, `fps=${num4(fps)}`);
-      const parts = ['format=yuv420p'].concat(stages);
-      // plain filters are chained with commas; a LUT with opacity needs a small split/blend graph
-      let chain = [];
+    // Join everything into one filter graph. Plain filters chain with commas; a masked effect or a LUT with
+    // opacity splits the picture, treats one copy, and puts the two back together.
+    function compose(inLabel, outLabel, post, maskLabel) {
       const segments = [];
+      let head = inLabel || '';
+      let chain = ['format=yuv420p'];
       let n = 0;
-      for (const st of parts) {
-        if (typeof st === 'string') { chain.push(st); continue; }
-        if (st.opacity >= 0.999) { chain.push(`lut3d=file=${lutArg(st.lut)}`); continue; }
-        const a = `s${n}a`, b = `s${n}b`, c = `s${n}c`;
-        n++;
-        chain.push(`split[${a}][${b}]`);
-        segments.push(chain.join(','));
-        segments.push(`[${b}]lut3d=file=${lutArg(st.lut)}[${c}]`);
-        chain = [`[${a}][${c}]blend=all_mode=normal:all_opacity=${num4(st.opacity)}`];
+      const close = (tail) => { segments.push(`${head}${chain.join(',')}${tail || ''}`); };
+      const feather = cfg['artifact masking'].feathering ? `,gblur=sigma=${num4(Math.max(2, (height || 720) / 90))}` : '';
+      const maskLabels = [];
+      for (let i = 0; i < maskCount; i++) maskLabels.push(`[mk${i}]`);
+      if (maskCount) {
+        segments.push(`${maskLabel}format=gray,scale=${width || 'iw'}:${height || 'ih'}${feather}${maskCount > 1 ? `,split=${maskCount}` : ''}${maskLabels.join('')}`);
       }
-      segments.push(chain.join(','));
-      body = segments.join(';');
+      let mi = 0;
+      for (const st of stages) {
+        if (st.f) { chain.push(st.f); continue; }
+        if (st.masked) {
+          const k = n++, m = mi++;
+          chain.push(`split[o${k}][p${k}]`);
+          close();
+          segments.push(`[p${k}]${st.masked.join(',')}[q${k}]`);
+          segments.push(st.origFps ? `[o${k}]fps=${num4(st.origFps)}[r${k}]` : `[o${k}]null[r${k}]`);
+          segments.push(`[q${k}]${maskLabels[m]}alphamerge[a${k}]`);
+          head = `[r${k}][a${k}]`;
+          chain = ['overlay=format=auto:shortest=1'];
+          continue;
+        }
+        const op = st.opacity;
+        if (op >= 0.999) { chain.push(`lut3d=file=${lutArg(st.lut)}`); continue; }
+        const k = n++;
+        chain.push(`split[o${k}][p${k}]`);
+        close();
+        segments.push(`[p${k}]lut3d=file=${lutArg(st.lut)}[q${k}]`);
+        head = `[o${k}][q${k}]`;
+        chain = [`blend=all_mode=normal:all_opacity=${num4(op)}`];
+      }
+      if (post) chain.push(post);
+      close(outLabel);
+      return segments.join(';');
     }
-    return { body, speed, outFps: fps || baseFps, notes, touched };
+
+    const plan = { speed, outFps: fps || baseFps, notes, touched, pre, maskPath, maskCount, feather: cfg['artifact masking'].feathering, compose };
+    plan.body = touched ? compose('', '', '', '') : '';
+    return plan;
   }
 
   // a speed change as an audio filter chain (atempo only accepts 0.5 to 100 per step)
@@ -337,13 +400,16 @@
     const cfg = normalize(input);
     const bits = [];
     const fb = cfg['frame blending'], it = cfg.interpolation;
+    if (cfg['pre-interp'].enabled) bits.push(`RIFE ${cfg['pre-interp'].factor}`);
     if (it.enabled) bits.push(`interpolate to ${it.fps}`);
+    if (cfg.flowblur.enabled) bits.push(`flowblur ${cfg.flowblur.amount}%`);
     if (fb.enabled) bits.push(`blend to ${fb.fps} fps (x${fb.intensity})`);
     if (Math.abs(cfg.timescale.out / cfg.timescale.in - 1) > 1e-6) bits.push(`speed x${num4(cfg.timescale.out / cfg.timescale.in)}`);
     if (cfg['color grading'].enabled) bits.push('color');
     if (cfg.lut.enabled && cfg.lut.path) bits.push('LUT');
+    if (cfg['artifact masking'].enabled && cfg['artifact masking']['file name']) bits.push('mask');
     return bits.length ? bits.join(' · ') : 'nothing switched on yet';
   }
 
-  return { SCHEMA, WEIGHTINGS, defaults, normalize, parseRecipe, serializeRecipe, build, speedOf, atempoChain, weights, summary, parseTargetFps, lutArg };
+  return { SCHEMA, WEIGHTINGS, joinPath, maskPathOf, parseFactor, defaults, normalize, parseRecipe, serializeRecipe, build, speedOf, atempoChain, weights, summary, parseTargetFps, lutArg };
 });

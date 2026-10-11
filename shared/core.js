@@ -23,6 +23,9 @@
     { id: 'balanced', label: 'Balanced', mode: 'crf', crf: 28 },
     { id: 'small', label: 'Smallest file', mode: 'crf', crf: 32 },
     { id: 'custom', label: 'Custom size…', mode: 'size', targetMB: null },
+    // only offered by the Smoothie page (output quality, not a size target)
+    { id: 'q-max', label: 'Near lossless', mode: 'crf', crf: 14, hidden: true },
+    { id: 'q-high', label: 'Very high', mode: 'crf', crf: 18, hidden: true },
   ];
 
   const DEFAULT_SETTINGS = {

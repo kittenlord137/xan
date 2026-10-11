@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src file: 'self'; img-src 'self' data:">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src file: 'self'; img-src 'self' data: file:">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>xan</title>
   <link rel="stylesheet" href="style.css">
@@ -49,8 +49,9 @@
 <div id="shell">
 
 <nav id="nav">
+  <div id="navInd" class="nav-ind hidden"></div>
   <div class="nav-brand">
-    <div class="logo-tile"><svg class="i"><use href="#i-logo"/></svg></div>
+    <img class="logo-img" src="icon.png" alt="" draggable="false">
     <div class="nav-brand-text"><b>xan</b><small id="navVersion"></small></div>
   </div>
   <div class="nav-sec">Main</div>
@@ -63,7 +64,7 @@
 
 <main id="content">
 
-<div id="app">
+<div id="app" class="page">
 
   <header id="topbar">
     <div class="crumbs"><b>Trim &amp; Compress</b><svg class="i"><use href="#i-chev-r"/></svg><span>Clip editor</span></div>
@@ -87,7 +88,7 @@
   <section id="stage">
     <div id="dropzone">
       <div class="dz-inner">
-        <svg class="dz-logo"><use href="#i-logo"/></svg>
+        <img class="dz-logo" src="icon.png" alt="" draggable="false">
         <h1>DROP VIDEO(S)</h1>
         <p>or <button id="dzOpen" class="link">click to browse</button></p>
         <p class="hint"><kbd>I</kbd> <kbd>O</kbd> set start and end &nbsp;&middot;&nbsp; <kbd>Space</kbd> play &nbsp;&middot;&nbsp; <kbd>Ctrl</kbd>+<kbd>E</kbd> export</p>
@@ -99,7 +100,7 @@
       <div id="proxyBadge" class="proxy-badge hidden">Low-res preview &middot; the export uses your original</div>
       <div id="playerMsg" class="player-msg hidden"></div>
     </div>
-    <div id="dropOverlay" class="hidden"><span>Drop to add video(s)</span></div>
+    
   </section>
 
   <aside id="sidebar" class="hidden">
@@ -115,21 +116,15 @@
         </div>
         <svg class="i chev"><use href="#i-chev-d"/></svg>
       </div>
-      <div id="segList" class="seg-list"></div>
-      <div id="segTotal" class="seg-total"></div>
-    </div>
-
-    <div class="panel" id="smPanel">
-      <div class="panel-head"><svg class="i ph-ico"><use href="#i-sparkle"/></svg><h2>Smoothie</h2><svg class="i chev"><use href="#i-chev-d"/></svg></div>
-      <label class="opt master"><input type="checkbox" class="sm-apply"><span>Apply when exporting</span></label>
-      <select id="smQuick" class="wide" title="Which Smoothie config to use"></select>
-      <div class="sm-line" id="smLine"></div>
-      <div class="sm-line warn hidden" id="smNote"></div>
-      <button id="smEdit" class="secondary wide">Edit settings…</button>
+      <div class="pb"><div class="pb-inner">
+        <div id="segList" class="seg-list"></div>
+        <div id="segTotal" class="seg-total"></div>
+      </div></div>
     </div>
 
     <div class="panel" id="compPanel">
       <div class="panel-head"><svg class="i ph-ico"><use href="#i-sliders"/></svg><h2>Compression</h2><svg class="i chev"><use href="#i-chev-d"/></svg></div>
+      <div class="pb"><div class="pb-inner">
       <div class="form">
         <label for="preset">Target</label>
         <select id="preset"></select>
@@ -171,6 +166,7 @@
       </div>
       <div id="compNote" class="note hidden"></div>
       <div id="estLine" class="est"></div>
+      </div></div>
     </div>
   </aside>
 
@@ -205,12 +201,63 @@
 </div>
 
 <section id="page-smoothie" class="page hidden">
-  <header class="page-head"><div class="crumbs"><b>Smoothie</b><svg class="i"><use href="#i-chev-r"/></svg><span>Motion blur &amp; smoothing</span></div></header>
-  <div class="page-body sm-page">
-    <div class="panel" id="smTop"></div>
-    <div class="sm-cols">
-      <div class="sm-col" id="smColL"></div>
-      <div class="sm-col" id="smColR"></div>
+  <header class="page-head">
+    <div class="crumbs"><b>Smoothie</b><svg class="i"><use href="#i-chev-r"/></svg><span>Motion blur &amp; smoothing</span></div>
+    <div class="spacer"></div>
+    <span id="smFileCount" class="file-meta"></span>
+    <button id="smBtnOpen" class="pill"><svg class="i"><use href="#i-open"/></svg><span>Add clips</span></button>
+  </header>
+  <div class="sm-layout">
+    <div class="sm-left">
+      <div class="sm-stage" id="smStage">
+        <div id="smDrop" class="sm-drop">
+          <div class="dz-inner">
+            <img class="dz-logo" src="icon.png" alt="" draggable="false">
+            <h1>DROP A CLIP</h1>
+            <p>or <button id="smDropOpen" class="link">click to browse</button></p>
+            <p class="hint">Smoothie works on its own here: add a clip, pick your settings, render. Nothing is compressed to a size.</p>
+          </div>
+        </div>
+        <div id="smPlayer" class="sm-player hidden">
+          <video id="smVideo" controls preload="auto"></video>
+          <div id="smProxyBadge" class="proxy-badge hidden">Low-res preview &middot; the render uses your original</div>
+          <div id="smPlayerMsg" class="player-msg hidden"></div>
+        </div>
+      </div>
+      <div class="panel hidden" id="smClips">
+        <div class="panel-head"><svg class="i ph-ico"><use href="#i-film"/></svg><h2>Clips</h2><svg class="i chev"><use href="#i-chev-d"/></svg></div>
+        <div class="pb"><div class="pb-inner"><div id="smClipList" class="clip-list"></div></div></div>
+      </div>
+      <div class="panel" id="smOut">
+        <div class="panel-head"><svg class="i ph-ico"><use href="#i-sliders"/></svg><h2>Output</h2><svg class="i chev"><use href="#i-chev-d"/></svg></div>
+        <div class="pb"><div class="pb-inner">
+          <div class="form">
+            <label for="smQuality">Quality</label>
+            <select id="smQuality">
+              <option value="q-max">Near lossless (huge files)</option>
+              <option value="q-high">Very high</option>
+              <option value="high">High</option>
+              <option value="balanced">Balanced (smaller)</option>
+            </select>
+            <label for="smCodec">Codec</label>
+            <select id="smCodec">
+              <option value="h264">H.264 (plays everywhere)</option>
+              <option value="h265">H.265 (about 35% smaller)</option>
+            </select>
+            <label for="smAudio">Audio</label>
+            <select id="smAudio"></select>
+          </div>
+          <div class="btn-line out-line">
+            <button id="smOutDir" class="pill" title=""><svg class="i"><use href="#i-folder"/></svg><span id="smOutDirText">Save next to the original</span></button>
+            <button id="smOutReset" class="pill icon-only hidden" title="Save next to the original again"><svg class="i"><use href="#i-x"/></svg></button>
+          </div>
+          <button id="smRender" class="primary wide" disabled><svg class="i"><use href="#i-sparkle"/></svg><span id="smRenderText">Render</span></button>
+        </div></div>
+      </div>
+    </div>
+    <div class="sm-right">
+      <div class="panel" id="smTop"></div>
+      <div class="sm-cards" id="smCards"></div>
     </div>
   </div>
 </section>
@@ -218,11 +265,14 @@
 </main>
 </div>
 
+<div id="dropOverlay" class="hidden"><span>Drop to add video(s)</span></div>
 <div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
 <div id="toast" class="toast hidden"></div>
 
 <script src="../shared/core.js"></script>
 <script src="../shared/smoothie.js"></script>
+<script src="common.js"></script>
+<script src="smoothie-page.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
