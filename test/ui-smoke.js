@@ -120,6 +120,8 @@ app.whenReady().then(async () => {
   console.log('compression panel');
   await setSelect('preset', 'size10');
   check('est line says up to 10 MB', (await js(`document.getElementById('estLine').textContent`)).includes('10 MB'));
+  check('the encoder choice is there, automatic by default', await js(`document.getElementById('encoder').value === 'auto'`));
+  check('and it says no graphics card encoder was found on this machine', await waitFor(`/no graphics card encoder/.test(document.querySelector('#encoder option[value=auto]').textContent)`, 8000));
   await setSelect('height', '720');
   await setSelect('cutMode', 'separate');
   const exportBtn = await js(`document.getElementById('exportSummary').textContent`);

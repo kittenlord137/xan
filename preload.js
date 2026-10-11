@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('api', {
   importRecipe: () => ipcRenderer.invoke('recipe:import'),
   exportRecipe: (payload) => ipcRenderer.invoke('recipe:export', payload),
   chooseFolder: () => ipcRenderer.invoke('dialog:folder'),
+  hardware: () => ipcRenderer.invoke('app:hardware'),
   binaries: () => ipcRenderer.invoke('app:binaries'),
   launchPaths: () => ipcRenderer.invoke('app:launchPaths'),
   probe: (p) => ipcRenderer.invoke('media:probe', p),

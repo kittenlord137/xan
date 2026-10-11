@@ -196,6 +196,7 @@ ipcMain.handle('app:binaries', () => {
   return binaryStatus;
 });
 
+ipcMain.handle('app:hardware', () => engine.detectHardware());
 ipcMain.handle('app:launchPaths', () => launchPaths(process.argv));
 
 ipcMain.handle('media:probe', async (_e, p) => {
@@ -283,6 +284,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     createWindow();
+    engine.detectHardware();      // look for a graphics card encoder in the background
     setupShortcuts();
     setupUpdates();
   });

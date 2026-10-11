@@ -40,7 +40,7 @@
     const r = Core.resolve(state.settings);
     state.settings.preset = r.presetId; state.settings.codec = r.codec;
     state.settings.height = r.height; state.settings.fps = r.fps;
-    state.settings.audio = r.audio; state.settings.speed = r.speed;
+    state.settings.audio = r.audio; state.settings.speed = r.speed; state.settings.encoder = r.encoder;
     if (!(Number(state.settings.customMB) > 0)) state.settings.customMB = Core.DEFAULT_SETTINGS.customMB;
   }
   function savePrefs() {
@@ -415,6 +415,9 @@
     $('height').value = String(s.height);
     $('fps').value = String(s.fps);
     $('speed').value = s.speed;
+    $('encoder').value = s.encoder;
+    $('speed').disabled = s.encoder === 'auto' && !!state.hw;
+    $('speed').title = $('speed').disabled ? 'Only used when the processor encodes (the graphics card has its own speed)' : '';
     const custom = s.preset === 'custom';
     $('customLabel').classList.toggle('hidden', !custom);
     $('customWrap').classList.toggle('hidden', !custom);
@@ -656,6 +659,7 @@
     bindSetting('fps', 'fps', Number);
     bindSetting('audio', 'audio');
     bindSetting('speed', 'speed');
+    bindSetting('encoder', 'encoder');
     $('customMB').addEventListener('input', () => {
       const v = Number($('customMB').value);
       state.settings.customMB = v > 0 ? v : 0;
@@ -771,6 +775,12 @@
     api.updateState().then(onUpdate);   // an update may already be downloaded if the page reloaded
     state.binaries = await api.binaries();
     UI.smoothieBinaries(state.binaries);
+    api.hardware().then((hw) => {
+      state.hw = hw || null;
+      const opt = $('encoder').querySelector('option[value="auto"]');
+      opt.textContent = hw ? `Automatic (${hw.label} graphics card)` : 'Automatic (no graphics card encoder found)';
+      renderCompression();
+    }).catch(() => {});
     renderCompression();
     if (!state.binaries.ok) {
       openModal(`<h3>ffmpeg could not be started</h3>

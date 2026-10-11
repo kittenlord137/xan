@@ -74,6 +74,8 @@ Save as many **configs** as you like. **Import** reads a `recipe.ini` from the r
 
 ## Good to know
 
+- **Speed.** Under **Compression > Encoder**, *Automatic* uses your graphics card (NVIDIA, AMD or Intel) when it can encode video, which is several times faster than the processor, and falls back to the processor by itself if the card can't do a clip. Pick *Processor only* for the best quality per MB. On the processor, *CPU speed* matters most: *Slow* can take several times longer than *Balanced*, and H.265 is slower than H.264.
+
 - **The window scales.** The whole interface zooms to fit the window, from a small window up to a large screen.
 
 - **Previews.** Videos the built-in player can't show reliably (HEVC from many GPU recorders, 10-bit, and so on) get a small low-res preview copy automatically. The export always uses your original.

@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "test": "node test/engine.test.js && node test/smoothie.test.js && node test/release.test.js",
+    "test": "node test/engine.test.js && node test/smoothie.test.js && node test/hardware.test.js && node test/release.test.js",
     "dist": "electron-builder --win nsis portable --publish never",
     "dist:dir": "electron-builder --dir",
     "test:ui": "electron test/ui-smoke.js",

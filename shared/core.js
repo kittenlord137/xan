@@ -30,7 +30,7 @@
 
   const DEFAULT_SETTINGS = {
     preset: 'balanced', customMB: 20, codec: 'h264',
-    height: 0, fps: 0, audio: 'all', speed: 'medium',
+    height: 0, fps: 0, audio: 'all', speed: 'medium', encoder: 'auto',
   };
 
   function resolve(s) {
@@ -45,6 +45,7 @@
       fps: Number(s.fps) || 0,
       audio: ['all', 'first', 'none'].includes(s.audio) ? s.audio : 'all',
       speed: ['veryfast', 'medium', 'slow'].includes(s.speed) ? s.speed : 'medium',
+      encoder: s.encoder === 'cpu' ? 'cpu' : 'auto',     // auto = the graphics card when it can encode, otherwise the processor
     };
     if (p.mode === 'crf') {
       out.baseCrf = p.crf;

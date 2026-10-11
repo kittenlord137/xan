@@ -138,6 +138,12 @@
           <option value="h265">H.265 (about 35% smaller)</option>
         </select>
 
+        <label for="encoder">Encoder</label>
+        <select id="encoder">
+          <option value="auto">Automatic</option>
+          <option value="cpu">Processor only</option>
+        </select>
+
         <label for="height">Resolution</label>
         <select id="height">
           <option value="0">Original</option>
@@ -157,7 +163,7 @@
         <label for="audio">Audio</label>
         <select id="audio"></select>
 
-        <label for="speed">Encoding</label>
+        <label for="speed">CPU speed</label>
         <select id="speed">
           <option value="veryfast">Fast</option>
           <option value="medium">Balanced</option>
