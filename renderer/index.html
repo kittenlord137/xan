@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src file: 'self'; img-src 'self' data:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>xan</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-to-start" viewBox="0 0 24 24"><path d="M6 5v14"/><path d="M19 6v12l-9-6z" fill="currentColor"/></symbol>
+    <symbol id="i-to-end" viewBox="0 0 24 24"><path d="M18 5v14"/><path d="M5 6v12l9-6z" fill="currentColor"/></symbol>
+    <symbol id="i-set-start" viewBox="0 0 24 24"><path d="M11 4H6v16h5"/><path d="M13 12h8M18 8l4 4-4 4"/></symbol>
+    <symbol id="i-set-end" viewBox="0 0 24 24"><path d="M13 4h5v16h-5"/><path d="M11 12H3M6 8l-4 4 4 4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.3 7.4L20 18M8.3 16.6L20 6"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M5 15v4h14v-4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path d="M17 9l5 6M22 9l-5 6"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 17v.01"/></symbol>
+    <symbol id="i-logo" viewBox="0 0 48 48"><rect x="4" y="4" width="40" height="40" rx="11"/><path d="M16 16l16 16M32 16L16 32"/></symbol>
+    <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.8"/><circle cx="6" cy="18" r="2.8"/><path d="M8.4 7.6L21 18M8.4 16.4L21 6"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01" stroke-width="3"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15v4M17 17h4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+    <symbol id="i-blur" viewBox="0 0 24 24"><path d="M12 3s6 6.2 6 10.5a6 6 0 0 1-12 0C6 9.2 12 3 12 3z"/><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2"/></symbol>
+    <symbol id="i-keys" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v5h-5"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M8 4v16M16 4v16M3 9h5M3 15h5M16 9h5M16 15h5"/></symbol>
+  </defs>
+</svg>
+
+<div id="shell">
+
+<nav id="nav">
+  <div class="nav-brand">
+    <div class="logo-tile"><svg class="i"><use href="#i-logo"/></svg></div>
+    <div class="nav-brand-text"><b>xan</b><small id="navVersion"></small></div>
+  </div>
+  <div class="nav-sec">Main</div>
+  <button class="nav-item active" data-page="editor"><svg class="i"><use href="#i-scissors"/></svg><span>Trim &amp; Compress</span></button>
+  <button class="nav-item" data-page="smoothie"><svg class="i"><use href="#i-sparkle"/></svg><span>Smoothie</span></button>
+  <div class="nav-sec">Other</div>
+  <button class="nav-item" id="navHelp"><svg class="i"><use href="#i-keys"/></svg><span>Shortcuts</span></button>
+  <button class="nav-item" id="navUpdates"><svg class="i"><use href="#i-refresh"/></svg><span>Check for updates</span></button>
+</nav>
+
+<main id="content">
+
+<div id="app">
+
+  <header id="topbar">
+    <div class="crumbs"><b>Trim &amp; Compress</b><svg class="i"><use href="#i-chev-r"/></svg><span>Clip editor</span></div>
+    <div class="file-info">
+      <div id="fileMeta" class="file-meta"></div>
+      <button id="btnCloseFile" class="pill icon-only hidden" title="Close this video"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="spacer"></div>
+    <button id="btnUpdate" class="pill update hidden"></button>
+    <select id="fileSelect" class="pill hidden" title="Loaded videos"></select>
+    <button id="btnOutDir" class="pill" title="Where exported videos are saved"><svg class="i"><use href="#i-folder"/></svg><span id="outDirText">Output: same folder as video</span></button>
+    <button id="btnOutReset" class="pill hidden" title="Save next to the original video again"><svg class="i"><use href="#i-x"/></svg></button>
+    <select id="cutMode" class="pill" title="What to do when there are several segments">
+      <option value="separate">Separate files</option>
+      <option value="merge">Merge cuts</option>
+    </select>
+    <button id="btnOpen" class="pill"><svg class="i"><use href="#i-open"/></svg><span>Open</span></button>
+    <button id="btnHelp" class="pill icon-only" title="Keyboard shortcuts (F1)"><svg class="i"><use href="#i-help"/></svg></button>
+  </header>
+
+  <section id="stage">
+    <div id="dropzone">
+      <div class="dz-inner">
+        <svg class="dz-logo"><use href="#i-logo"/></svg>
+        <h1>DROP VIDEO(S)</h1>
+        <p>or <button id="dzOpen" class="link">click to browse</button></p>
+        <p class="hint"><kbd>I</kbd> <kbd>O</kbd> set start and end &nbsp;&middot;&nbsp; <kbd>Space</kbd> play &nbsp;&middot;&nbsp; <kbd>Ctrl</kbd>+<kbd>E</kbd> export</p>
+        <p class="hint">Trim a clip, pick a size, export. Your original is never changed.</p>
+      </div>
+    </div>
+    <div id="player" class="hidden">
+      <video id="video" preload="auto"></video>
+      <div id="proxyBadge" class="proxy-badge hidden">Low-res preview &middot; the export uses your original</div>
+      <div id="playerMsg" class="player-msg hidden"></div>
+    </div>
+    <div id="dropOverlay" class="hidden"><span>Drop to add video(s)</span></div>
+  </section>
+
+  <aside id="sidebar" class="hidden">
+    <div class="panel grow" id="segPanel">
+      <div class="panel-head">
+        <svg class="i ph-ico"><use href="#i-list"/></svg>
+        <h2>Segments</h2>
+        <div class="btn-row">
+          <button id="btnAddSeg" class="tiny" title="Add a segment at the playhead (+)"><svg class="i"><use href="#i-plus"/></svg></button>
+          <button id="btnSplit" class="tiny" title="Split the segment at the playhead (S)"><svg class="i"><use href="#i-split"/></svg></button>
+          <button id="btnDelSeg" class="tiny" title="Remove the selected segment (Delete)"><svg class="i"><use href="#i-minus"/></svg></button>
+          <button id="btnResetSegs" class="tiny" title="Reset to the whole video"><svg class="i"><use href="#i-reset"/></svg></button>
+        </div>
+        <svg class="i chev"><use href="#i-chev-d"/></svg>
+      </div>
+      <div id="segList" class="seg-list"></div>
+      <div id="segTotal" class="seg-total"></div>
+    </div>
+
+    <div class="panel" id="smPanel">
+      <div class="panel-head"><svg class="i ph-ico"><use href="#i-sparkle"/></svg><h2>Smoothie</h2><svg class="i chev"><use href="#i-chev-d"/></svg></div>
+      <label class="opt master"><input type="checkbox" class="sm-apply"><span>Apply when exporting</span></label>
+      <select id="smQuick" class="wide" title="Which Smoothie config to use"></select>
+      <div class="sm-line" id="smLine"></div>
+      <div class="sm-line warn hidden" id="smNote"></div>
+      <button id="smEdit" class="secondary wide">Edit settings…</button>
+    </div>
+
+    <div class="panel" id="compPanel">
+      <div class="panel-head"><svg class="i ph-ico"><use href="#i-sliders"/></svg><h2>Compression</h2><svg class="i chev"><use href="#i-chev-d"/></svg></div>
+      <div class="form">
+        <label for="preset">Target</label>
+        <select id="preset"></select>
+
+        <label for="customMB" id="customLabel" class="hidden">Max size</label>
+        <div id="customWrap" class="hidden"><input id="customMB" type="number" min="1" step="1" inputmode="numeric"><span class="unit">MB</span></div>
+
+        <label for="codec">Codec</label>
+        <select id="codec">
+          <option value="h264">H.264 (plays everywhere)</option>
+          <option value="h265">H.265 (about 35% smaller)</option>
+        </select>
+
+        <label for="height">Resolution</label>
+        <select id="height">
+          <option value="0">Original</option>
+          <option value="1080">1080p max</option>
+          <option value="720">720p max</option>
+          <option value="480">480p max</option>
+        </select>
+
+        <label for="fps">Frame rate</label>
+        <select id="fps">
+          <option value="0">Original</option>
+          <option value="60">60 fps max</option>
+          <option value="30">30 fps</option>
+          <option value="24">24 fps</option>
+        </select>
+
+        <label for="audio">Audio</label>
+        <select id="audio"></select>
+
+        <label for="speed">Encoding</label>
+        <select id="speed">
+          <option value="veryfast">Fast</option>
+          <option value="medium">Balanced</option>
+          <option value="slow">Slow (smaller)</option>
+        </select>
+      </div>
+      <div id="compNote" class="note hidden"></div>
+      <div id="estLine" class="est"></div>
+    </div>
+  </aside>
+
+  <section id="timelineWrap" class="hidden">
+    <div id="timeline" tabindex="-1">
+      <div id="ticks"></div>
+      <div id="track"><div id="segLayer"></div></div>
+      <div id="playhead"><span></span></div>
+    </div>
+  </section>
+
+  <footer id="controls" class="hidden">
+    <div class="ctl-left">
+      <button id="btnMute" class="round" title="Mute preview (M)"><svg class="i"><use href="#i-vol"/></svg></button>
+      <div class="readout"><span id="timeReadout">00:00:00.000</span><span id="frameReadout">0f</span></div>
+    </div>
+    <div class="ctl-center">
+      <button id="btnSetStart" class="round" title="Segment starts here (I)"><svg class="i"><use href="#i-set-start"/></svg></button>
+      <button id="btnToStart" class="round" title="Jump to segment start (Up / Down: other segments)"><svg class="i"><use href="#i-to-start"/></svg></button>
+      <button id="btnFrameBack" class="round" title="Back one frame (,)"><svg class="i"><use href="#i-chev-l"/></svg></button>
+      <button id="btnPlay" class="round play" title="Play / pause (Space)"><svg class="i"><use href="#i-play"/></svg></button>
+      <button id="btnFrameFwd" class="round" title="Forward one frame (.)"><svg class="i"><use href="#i-chev-r"/></svg></button>
+      <button id="btnToEnd" class="round" title="Jump to segment end"><svg class="i"><use href="#i-to-end"/></svg></button>
+      <button id="btnSetEnd" class="round" title="Segment ends here (O)"><svg class="i"><use href="#i-set-end"/></svg></button>
+    </div>
+    <div class="ctl-right">
+      <label id="exportAllRow" class="chk hidden"><input type="checkbox" id="exportAll"><span>All <b id="exportAllCount"></b> videos</span></label>
+      <div id="exportSummary" class="export-summary"></div>
+      <button id="btnExport" class="primary"><svg class="i"><use href="#i-export"/></svg><span>Export</span></button>
+    </div>
+  </footer>
+</div>
+
+<section id="page-smoothie" class="page hidden">
+  <header class="page-head"><div class="crumbs"><b>Smoothie</b><svg class="i"><use href="#i-chev-r"/></svg><span>Motion blur &amp; smoothing</span></div></header>
+  <div class="page-body sm-page">
+    <div class="panel" id="smTop"></div>
+    <div class="sm-cols">
+      <div class="sm-col" id="smColL"></div>
+      <div class="sm-col" id="smColR"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<div id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="../shared/core.js"></script>
+<script src="../shared/smoothie.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
